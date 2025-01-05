@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 MP3 Player Settings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="number"], 
+        input[type="time"] {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 MP3 Player Settings</h1>
+        <form id="settingsForm">
+            <div class="form-group">
+                <label for="volume">Volume (0-30):</label>
+                <input type="number" id="volume" min="0" max="30" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Active Hours:</label>
+                <div>
+                    <label for="startTime">Start:</label>
+                    <input type="time" id="startTime" required>
+                </div>
+                <div>
+                    <label for="endTime">End:</label>
+                    <input type="time" id="endTime" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="weekendEnabled">
+                    Enable on weekends
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label for="playInterval">Play Interval (minutes):</label>
+                <input type="number" id="playInterval" min="1" required>
+            </div>
+            
+            <button type="submit">Save Settings</button>
+            <button type="button" id="testPlay">Test Play</button>
+        </form>
+        
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Load current settings
+        fetch('/api/settings')
+            .then(response => response.json())
+            .then(settings => {
+                document.getElementById('volume').value = settings.volume;
+                document.getElementById('startTime').value = 
+                    `${String(settings.startHour).padStart(2, '0')}:${String(settings.startMinute).padStart(2, '0')}`;
+                document.getElementById('endTime').value = 
+                    `${String(settings.endHour).padStart(2, '0')}:${String(settings.endMinute).padStart(2, '0')}`;
+                document.getElementById('weekendEnabled').checked = settings.weekendEnabled;
+                document.getElementById('playInterval').value = settings.playInterval;
+            });
+
+        // Save settings
+        document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const startTime = document.getElementById('startTime').value.split(':');
+            const endTime = document.getElementById('endTime').value.split(':');
+            
+            const settings = {
+                volume: parseInt(document.getElementById('volume').value),
+                startHour: parseInt(startTime[0]),
+                startMinute: parseInt(startTime[1]),
+                endHour: parseInt(endTime[0]),
+                endMinute: parseInt(endTime[1]),
+                weekendEnabled: document.getElementById('weekendEnabled').checked,
+                playInterval: parseInt(document.getElementById('playInterval').value)
+            };
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const result = await response.json();
+                showStatus('Settings saved successfully!', 'success');
+            } catch (error) {
+                showStatus('Error saving settings: ' + error.message, 'error');
+            }
+        });
+
+        // Test play button
+        document.getElementById('testPlay').addEventListener('click', async () => {
+            try {
+                await fetch('/api/play', { method: 'POST' });
+                showStatus('Playing test sound...', 'success');
+            } catch (error) {
+                showStatus('Error playing test sound: ' + error.message, 'error');
+            }
+        });
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
