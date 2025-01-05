@@ -44,11 +44,21 @@ void setup()
 {
   Serial.begin(115200);
 
-  // Initialize SPIFFS for storing settings
   if (!SPIFFS.begin(true))
   {
     Serial.println("SPIFFS Mount Failed");
     return;
+  }
+
+  // List files in SPIFFS
+  File root = SPIFFS.open("/");
+  File file = root.openNextFile();
+  Serial.println("Files in SPIFFS:");
+  while (file)
+  {
+    Serial.print("  ");
+    Serial.println(file.name());
+    file = root.openNextFile();
   }
 
   // Initialize DFPlayer
@@ -80,27 +90,30 @@ void setupWiFi()
 {
   WiFiManager wifiManager;
 
-  // Uncomment to reset settings - FOR TESTING
-  // wifiManager.resetSettings();
-
   // Set config portal timeout
   wifiManager.setConfigPortalTimeout(180);
 
-  // Custom parameters
-  WiFiManagerParameter custom_mqtt_server("server", "mqtt server", "", 40);
-  wifiManager.addParameter(&custom_mqtt_server);
-
-  if (!wifiManager.autoConnect("ESP32_MP3_Player"))
+  // This will now try to connect using saved credentials first
+  if (!wifiManager.autoConnect("ESP32_MP3_Player", "12345678"))
   {
     Serial.println("Failed to connect and hit timeout");
     ESP.restart();
   }
 
   Serial.println("WiFi connected!");
+  Serial.print("IP Address: http://");
+  Serial.println(WiFi.localIP());
 }
 
 void setupWebServer()
 {
+  // Check if SPIFFS is mounted correctly
+  if (!SPIFFS.exists("/index.html"))
+  {
+    Serial.println("Warning: index.html not found in SPIFFS");
+    Serial.println("Did you upload the data folder?");
+  }
+
   // Serve static files
   server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
@@ -144,6 +157,9 @@ void setupWebServer()
     request->send(200, "application/json", "{\"status\":\"playing\"}"); });
 
   server.begin();
+  Serial.println("Web server started");
+  Serial.print("You can access the interface at: http://");
+  Serial.println(WiFi.localIP());
 }
 
 void saveSettings()
