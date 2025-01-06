@@ -24,12 +24,11 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org");
 struct Settings
 {
   int volume = 15;
-  int startHour = 9;
-  int startMinute = 0;
-  int endHour = 22;
-  int endMinute = 0;
-  bool weekendEnabled = true;
-  int playInterval = 60; // minutes
+  static const int MAX_TIMES = 10;                 // Maximum number of scheduled times
+  int scheduledHours[MAX_TIMES] = {8, 11, 13, 17}; // Default times
+  int scheduledMinutes[MAX_TIMES] = {0, 45, 0, 0};
+  int activeTimeCount = 4; // Number of active scheduled times
+  int timezone = 0;        // Changed default to UTC+0 (London)
 } settings;
 
 // Function declarations
@@ -75,9 +74,9 @@ void setup()
   // Setup WiFi using WiFiManager
   setupWiFi();
 
-  // Initialize time client
+  // Initialize time client with timezone
   timeClient.begin();
-  timeClient.setTimeOffset(0); // Will be set based on timezone later
+  timeClient.setTimeOffset(settings.timezone * 3600); // Convert hours to seconds
 
   // Load saved settings
   loadSettings();
@@ -120,14 +119,19 @@ void setupWebServer()
   // API endpoints
   server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     doc["volume"] = settings.volume;
-    doc["startHour"] = settings.startHour;
-    doc["startMinute"] = settings.startMinute;
-    doc["endHour"] = settings.endHour;
-    doc["endMinute"] = settings.endMinute;
-    doc["weekendEnabled"] = settings.weekendEnabled;
-    doc["playInterval"] = settings.playInterval;
+    doc["timezone"] = settings.timezone;
+    
+    JsonArray hours = doc.createNestedArray("scheduledHours");
+    JsonArray minutes = doc.createNestedArray("scheduledMinutes");
+    
+    for(int i = 0; i < settings.activeTimeCount; i++) {
+      hours.add(settings.scheduledHours[i]);
+      minutes.add(settings.scheduledMinutes[i]);
+    }
+    
+    doc["activeTimeCount"] = settings.activeTimeCount;
     
     String response;
     serializeJson(doc, response);
@@ -135,16 +139,41 @@ void setupWebServer()
 
   server.on("/api/settings", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
             {
-      DynamicJsonDocument doc(1024);
+      JsonDocument doc;
       deserializeJson(doc, (const char*)data);
       
+      // Debug incoming data
+      Serial.println("Received settings:");
+      serializeJsonPretty(doc, Serial);
+      Serial.println();
+      
       settings.volume = doc["volume"] | settings.volume;
-      settings.startHour = doc["startHour"] | settings.startHour;
-      settings.startMinute = doc["startMinute"] | settings.startMinute;
-      settings.endHour = doc["endHour"] | settings.endHour;
-      settings.endMinute = doc["endMinute"] | settings.endMinute;
-      settings.weekendEnabled = doc["weekendEnabled"] | settings.weekendEnabled;
-      settings.playInterval = doc["playInterval"] | settings.playInterval;
+      
+      // Debug timezone changes
+      int oldTimezone = settings.timezone;
+      settings.timezone = doc["timezone"] | settings.timezone;
+      Serial.printf("Timezone changed from UTC%+d to UTC%+d\n", 
+                   oldTimezone, settings.timezone);
+      
+      timeClient.setTimeOffset(settings.timezone * 3600);
+      
+      // Handle scheduled times
+      JsonArray hours = doc["scheduledHours"];
+      JsonArray minutes = doc["scheduledMinutes"];
+      int newCount = doc["activeTimeCount"] | 0;
+      
+      Serial.printf("Received %d scheduled times\n", newCount);
+      
+      settings.activeTimeCount = min((size_t)settings.MAX_TIMES, (size_t)newCount);
+      
+      for(int i = 0; i < settings.activeTimeCount; i++) {
+        settings.scheduledHours[i] = hours[i];
+        settings.scheduledMinutes[i] = minutes[i];
+        Serial.printf("Saved time slot %d: %02d:%02d\n", 
+                     i + 1, 
+                     settings.scheduledHours[i], 
+                     settings.scheduledMinutes[i]);
+      }
       
       myMP3.volume(settings.volume);
       saveSettings();
@@ -155,6 +184,11 @@ void setupWebServer()
             {
     myMP3.playFolder(1, 1);
     request->send(200, "application/json", "{\"status\":\"playing\"}"); });
+
+  server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
+    myMP3.stop();
+    request->send(200, "application/json", "{\"status\":\"stopped\"}"); });
 
   server.begin();
   Serial.println("Web server started");
@@ -171,14 +205,19 @@ void saveSettings()
     return;
   }
 
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   doc["volume"] = settings.volume;
-  doc["startHour"] = settings.startHour;
-  doc["startMinute"] = settings.startMinute;
-  doc["endHour"] = settings.endHour;
-  doc["endMinute"] = settings.endMinute;
-  doc["weekendEnabled"] = settings.weekendEnabled;
-  doc["playInterval"] = settings.playInterval;
+
+  JsonArray hours = doc.createNestedArray("scheduledHours");
+  JsonArray minutes = doc.createNestedArray("scheduledMinutes");
+
+  for (int i = 0; i < settings.activeTimeCount; i++)
+  {
+    hours.add(settings.scheduledHours[i]);
+    minutes.add(settings.scheduledMinutes[i]);
+  }
+
+  doc["activeTimeCount"] = settings.activeTimeCount;
 
   if (serializeJson(doc, file) == 0)
   {
@@ -197,7 +236,7 @@ void loadSettings()
     return;
   }
 
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, file);
   if (error)
   {
@@ -206,12 +245,17 @@ void loadSettings()
   }
 
   settings.volume = doc["volume"] | settings.volume;
-  settings.startHour = doc["startHour"] | settings.startHour;
-  settings.startMinute = doc["startMinute"] | settings.startMinute;
-  settings.endHour = doc["endHour"] | settings.endHour;
-  settings.endMinute = doc["endMinute"] | settings.endMinute;
-  settings.weekendEnabled = doc["weekendEnabled"] | settings.weekendEnabled;
-  settings.playInterval = doc["playInterval"] | settings.playInterval;
+
+  JsonArray hours = doc["scheduledHours"];
+  JsonArray minutes = doc["scheduledMinutes"];
+
+  settings.activeTimeCount = min((size_t)settings.MAX_TIMES, hours.size());
+
+  for (int i = 0; i < settings.activeTimeCount; i++)
+  {
+    settings.scheduledHours[i] = hours[i] | settings.scheduledHours[i];
+    settings.scheduledMinutes[i] = minutes[i] | settings.scheduledMinutes[i];
+  }
 
   file.close();
 }
@@ -221,35 +265,87 @@ bool isWithinActiveHours()
   timeClient.update();
   int currentHour = timeClient.getHours();
   int currentMinute = timeClient.getMinutes();
-  int currentTime = currentHour * 60 + currentMinute;
-  int startTime = settings.startHour * 60 + settings.startMinute;
-  int endTime = settings.endHour * 60 + settings.endMinute;
 
-  if (!settings.weekendEnabled)
+  // Check if current time matches any scheduled time
+  for (int i = 0; i < settings.activeTimeCount; i++)
   {
-    time_t rawtime = timeClient.getEpochTime();
-    struct tm *ti = localtime(&rawtime);
-    if (ti->tm_wday == 0 || ti->tm_wday == 6)
-    { // Weekend
-      return false;
+    if (currentHour == settings.scheduledHours[i] &&
+        currentMinute == settings.scheduledMinutes[i])
+    {
+      return true;
     }
   }
-
-  return currentTime >= startTime && currentTime <= endTime;
+  return false;
 }
 
 void playScheduledAnnouncement()
 {
-  static unsigned long lastPlayTime = 0;
-  unsigned long currentTime = millis();
+  static unsigned long lastCheck = 0;
+  unsigned long currentMillis = millis();
 
-  if (currentTime - lastPlayTime >= (settings.playInterval * 60000))
-  { // Convert minutes to milliseconds
-    if (isWithinActiveHours())
+  // Check every 30 seconds
+  if (currentMillis - lastCheck >= 30000)
+  {
+    lastCheck = currentMillis;
+
+    timeClient.update();
+    int currentHour = timeClient.getHours();
+    int currentMinute = timeClient.getMinutes();
+
+    // Debug: Print current time
+    Serial.printf("Current time: %02d:%02d\n", currentHour, currentMinute);
+    Serial.println("Scheduled times:");
+    for (int i = 0; i < settings.activeTimeCount; i++)
     {
-      myMP3.playFolder(1, 1);
-      lastPlayTime = currentTime;
+      Serial.printf("  Time slot %d: %02d:%02d\n",
+                    i + 1,
+                    settings.scheduledHours[i],
+                    settings.scheduledMinutes[i]);
     }
+
+    // Check each scheduled time
+    for (int i = 0; i < settings.activeTimeCount; i++)
+    {
+      // Debug: Print comparison
+      Serial.printf("Checking slot %d: %02d:%02d == %02d:%02d ? ",
+                    i + 1,
+                    currentHour, currentMinute,
+                    settings.scheduledHours[i],
+                    settings.scheduledMinutes[i]);
+
+      if (currentHour == settings.scheduledHours[i] &&
+          currentMinute == settings.scheduledMinutes[i])
+      {
+        Serial.println("Match found!");
+        static int lastPlayedHour = -1;
+        static int lastPlayedMinute = -1;
+
+        // Only play if we haven't played at this exact time
+        if (currentHour != lastPlayedHour || currentMinute != lastPlayedMinute)
+        {
+          Serial.printf("Playing scheduled announcement at %02d:%02d\n",
+                        currentHour, currentMinute);
+          Serial.printf("Last played at: %02d:%02d\n",
+                        lastPlayedHour, lastPlayedMinute);
+
+          myMP3.playFolder(1, 1);
+          lastPlayedHour = currentHour;
+          lastPlayedMinute = currentMinute;
+
+          Serial.println("Announcement played successfully");
+        }
+        else
+        {
+          Serial.println("Already played at this time");
+        }
+        break; // Exit loop after playing
+      }
+      else
+      {
+        Serial.println("No match");
+      }
+    }
+    Serial.println("--------------------");
   }
 }
 

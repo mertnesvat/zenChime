@@ -60,6 +60,22 @@
             background-color: #f2dede;
             color: #a94442;
         }
+        .scheduled-time {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .scheduled-time button {
+            background-color: #dc3545;
+        }
+        #addTime {
+            background-color: #28a745;
+            margin-top: 10px;
+        }
+        #stopPlay {
+            background-color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -72,66 +88,100 @@
             </div>
             
             <div class="form-group">
-                <label>Active Hours:</label>
-                <div>
-                    <label for="startTime">Start:</label>
-                    <input type="time" id="startTime" required>
-                </div>
-                <div>
-                    <label for="endTime">End:</label>
-                    <input type="time" id="endTime" required>
-                </div>
+                <label for="timezone">Timezone:</label>
+                <select id="timezone" required>
+                    <option value="-12">(GMT-12:00) International Date Line West</option>
+                    <option value="-11">(GMT-11:00) Midway Island, Samoa</option>
+                    <option value="-10">(GMT-10:00) Hawaii</option>
+                    <option value="-9">(GMT-09:00) Alaska</option>
+                    <option value="-8">(GMT-08:00) Pacific Time (US & Canada)</option>
+                    <option value="-7">(GMT-07:00) Mountain Time (US & Canada)</option>
+                    <option value="-6">(GMT-06:00) Central Time (US & Canada), Mexico City</option>
+                    <option value="-5">(GMT-05:00) Eastern Time (US & Canada)</option>
+                    <option value="-4">(GMT-04:00) Atlantic Time (Canada)</option>
+                    <option value="-3">(GMT-03:00) Brasilia, Buenos Aires</option>
+                    <option value="-2">(GMT-02:00) Mid-Atlantic</option>
+                    <option value="-1">(GMT-01:00) Azores</option>
+                    <option value="0">(GMT+00:00) London, Dublin, Edinburgh</option>
+                    <option value="1">(GMT+01:00) Paris, Amsterdam, Berlin</option>
+                    <option value="2">(GMT+02:00) Athens, Istanbul, Cairo</option>
+                    <option value="3">(GMT+03:00) Moscow, Baghdad</option>
+                    <option value="4">(GMT+04:00) Dubai, Baku</option>
+                    <option value="5">(GMT+05:00) Islamabad, Karachi</option>
+                    <option value="5.5">(GMT+05:30) Mumbai, New Delhi</option>
+                    <option value="6">(GMT+06:00) Dhaka, Almaty</option>
+                    <option value="7">(GMT+07:00) Bangkok, Jakarta</option>
+                    <option value="8">(GMT+08:00) Singapore, Hong Kong</option>
+                    <option value="9">(GMT+09:00) Tokyo, Seoul</option>
+                    <option value="10">(GMT+10:00) Sydney, Melbourne</option>
+                    <option value="11">(GMT+11:00) Solomon Islands</option>
+                    <option value="12">(GMT+12:00) Auckland, Wellington</option>
+                </select>
             </div>
             
             <div class="form-group">
-                <label>
-                    <input type="checkbox" id="weekendEnabled">
-                    Enable on weekends
-                </label>
-            </div>
-            
-            <div class="form-group">
-                <label for="playInterval">Play Interval (minutes):</label>
-                <input type="number" id="playInterval" min="1" required>
+                <label>Scheduled Times:</label>
+                <div id="scheduledTimes">
+                    <!-- Times will be added here dynamically -->
+                </div>
+                <button type="button" id="addTime" onclick="addScheduledTime()">Add Time</button>
             </div>
             
             <button type="submit">Save Settings</button>
             <button type="button" id="testPlay">Test Play</button>
+            <button type="button" id="stopPlay" onclick="stopPlayback()">Stop</button>
         </form>
         
         <div id="status" class="status" style="display: none;"></div>
     </div>
 
     <script>
+        // Add this function to set the timezone based on browser's timezone
+        function setDefaultTimezone() {
+            const offset = -(new Date().getTimezoneOffset()) / 60;
+            const select = document.getElementById('timezone');
+            const option = select.querySelector(`option[value="${offset}"]`);
+            if (option) {
+                option.selected = true;
+            }
+        }
+
         // Load current settings
         fetch('/api/settings')
             .then(response => response.json())
             .then(settings => {
                 document.getElementById('volume').value = settings.volume;
-                document.getElementById('startTime').value = 
-                    `${String(settings.startHour).padStart(2, '0')}:${String(settings.startMinute).padStart(2, '0')}`;
-                document.getElementById('endTime').value = 
-                    `${String(settings.endHour).padStart(2, '0')}:${String(settings.endMinute).padStart(2, '0')}`;
-                document.getElementById('weekendEnabled').checked = settings.weekendEnabled;
-                document.getElementById('playInterval').value = settings.playInterval;
+                
+                // If no timezone is saved, use browser's timezone
+                if (!settings.timezone && settings.timezone !== 0) {
+                    setDefaultTimezone();
+                } else {
+                    document.getElementById('timezone').value = settings.timezone;
+                }
+                
+                // Clear and add all scheduled times
+                const container = document.getElementById('scheduledTimes');
+                container.innerHTML = '';
+                for(let i = 0; i < settings.activeTimeCount; i++) {
+                    addScheduledTime(settings.scheduledHours[i], settings.scheduledMinutes[i]);
+                }
             });
 
         // Save settings
         document.getElementById('settingsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const startTime = document.getElementById('startTime').value.split(':');
-            const endTime = document.getElementById('endTime').value.split(':');
+            const scheduledTimes = getScheduledTimes();
             
             const settings = {
                 volume: parseInt(document.getElementById('volume').value),
-                startHour: parseInt(startTime[0]),
-                startMinute: parseInt(startTime[1]),
-                endHour: parseInt(endTime[0]),
-                endMinute: parseInt(endTime[1]),
-                weekendEnabled: document.getElementById('weekendEnabled').checked,
-                playInterval: parseInt(document.getElementById('playInterval').value)
+                timezone: parseInt(document.getElementById('timezone').value),
+                scheduledHours: scheduledTimes.map(t => t.hour),
+                scheduledMinutes: scheduledTimes.map(t => t.minute),
+                activeTimeCount: scheduledTimes.length
             };
+            
+            console.log('Sending settings:', settings);  // Debug log
             
             try {
                 const response = await fetch('/api/settings', {
@@ -159,6 +209,15 @@
             }
         });
 
+        async function stopPlayback() {
+            try {
+                await fetch('/api/stop', { method: 'POST' });
+                showStatus('Playback stopped', 'success');
+            } catch (error) {
+                showStatus('Error stopping playback: ' + error.message, 'error');
+            }
+        }
+
         function showStatus(message, type) {
             const status = document.getElementById('status');
             status.textContent = message;
@@ -167,6 +226,29 @@
             setTimeout(() => {
                 status.style.display = 'none';
             }, 3000);
+        }
+
+        function addScheduledTime(hour = 8, minute = 0) {
+            const container = document.getElementById('scheduledTimes');
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'scheduled-time';
+            timeDiv.innerHTML = `
+                <input type="time" value="${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}">
+                <button type="button" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            container.appendChild(timeDiv);
+        }
+
+        function getScheduledTimes() {
+            const times = [];
+            document.querySelectorAll('.scheduled-time input[type="time"]').forEach(input => {
+                const [hours, minutes] = input.value.split(':');
+                times.push({
+                    hour: parseInt(hours),
+                    minute: parseInt(minutes)
+                });
+            });
+            return times;
         }
     </script>
 </body>
