@@ -12,6 +12,7 @@
 // Pin definitions
 #define MP3_RX 16
 #define MP3_TX 17
+#define BUTTON_PIN 13 // Using GPIO13 (D13)
 
 // Global objects
 DFPlayerMini_Fast myMP3;
@@ -31,6 +32,11 @@ struct Settings
   int timezone = 0;        // Changed default to UTC+0 (London)
 } settings;
 
+// Add these global variables at the top with other globals
+bool isPlaying = false;
+unsigned long lastButtonPress = 0;
+const unsigned long DEBOUNCE_TIME = 200; // Debounce time in milliseconds
+
 // Function declarations
 void saveSettings();
 void loadSettings();
@@ -38,6 +44,7 @@ void setupWiFi();
 void setupWebServer();
 bool isWithinActiveHours();
 void playScheduledAnnouncement();
+void handleButton();
 
 void setup()
 {
@@ -83,6 +90,9 @@ void setup()
 
   // Setup web server
   setupWebServer();
+
+  // Setup button pin
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
 
 void setupWiFi()
@@ -188,6 +198,7 @@ void setupWebServer()
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *request)
             {
     myMP3.stop();
+    isPlaying = false;
     request->send(200, "application/json", "{\"status\":\"stopped\"}"); });
 
   server.begin();
@@ -349,9 +360,38 @@ void playScheduledAnnouncement()
   }
 }
 
+void handleButton()
+{
+  // Read button state (LOW when pressed because of INPUT_PULLUP)
+  if (digitalRead(BUTTON_PIN) == LOW)
+  {
+    // Debounce
+    unsigned long currentTime = millis();
+    if (currentTime - lastButtonPress > DEBOUNCE_TIME)
+    {
+      lastButtonPress = currentTime;
+
+      // Toggle playback
+      if (isPlaying)
+      {
+        Serial.println("Button pressed: Stopping playback");
+        myMP3.stop();
+        isPlaying = false;
+      }
+      else
+      {
+        Serial.println("Button pressed: Starting playback");
+        myMP3.playFolder(1, 1);
+        isPlaying = true;
+      }
+    }
+  }
+}
+
 void loop()
 {
   timeClient.update();
   playScheduledAnnouncement();
-  delay(1000);
+  handleButton();
+  delay(100);
 }
