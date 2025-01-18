@@ -35,7 +35,10 @@ struct Settings
 // Add these global variables at the top with other globals
 bool isPlaying = false;
 unsigned long lastButtonPress = 0;
-const unsigned long DEBOUNCE_TIME = 200; // Debounce time in milliseconds
+const unsigned long DEBOUNCE_TIME = 200;          // Debounce time in milliseconds
+const unsigned long WIFI_RESET_PRESS_TIME = 5000; // 5 seconds for WiFi reset
+unsigned long buttonPressStartTime = 0;
+bool buttonWasPressed = false;
 
 // Function declarations
 void saveSettings();
@@ -99,19 +102,17 @@ void setupWiFi()
 {
   WiFiManager wifiManager;
 
-  // Set config portal timeout
+  // Enable captive portal functionality
+  wifiManager.setAPStaticIPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
+  wifiManager.setShowPassword(true);        // Show password while typing
+  wifiManager.setCaptivePortalEnable(true); // Enable captive portal
   wifiManager.setConfigPortalTimeout(180);
 
-  // This will now try to connect using saved credentials first
-  if (!wifiManager.autoConnect("ZenChime"))
+  // Use device name as password - common IoT practice
+  if (!wifiManager.autoConnect("ZenChime", "12345678"))
   {
-    Serial.println("Failed to connect and hit timeout");
     ESP.restart();
   }
-
-  Serial.println("WiFi connected!");
-  Serial.print("IP Address: http://");
-  Serial.println(WiFi.localIP());
 }
 
 void setupWebServer()
@@ -363,15 +364,32 @@ void playScheduledAnnouncement()
 void handleButton()
 {
   // Read button state (LOW when pressed because of INPUT_PULLUP)
-  if (digitalRead(BUTTON_PIN) == LOW)
-  {
-    // Debounce
-    unsigned long currentTime = millis();
-    if (currentTime - lastButtonPress > DEBOUNCE_TIME)
-    {
-      lastButtonPress = currentTime;
+  bool buttonIsPressed = (digitalRead(BUTTON_PIN) == LOW);
 
-      // Toggle playback
+  if (buttonIsPressed && !buttonWasPressed)
+  {
+    // Button just pressed
+    buttonPressStartTime = millis();
+    buttonWasPressed = true;
+  }
+  else if (buttonIsPressed && buttonWasPressed)
+  {
+    // Button is being held
+    if ((millis() - buttonPressStartTime) >= WIFI_RESET_PRESS_TIME)
+    {
+      // Reset WiFi settings using WiFiManager
+      WiFiManager wifiManager;
+      wifiManager.resetSettings();
+      ESP.restart(); // Restart device to enter initial config mode
+      return;
+    }
+  }
+  else if (!buttonIsPressed && buttonWasPressed)
+  {
+    // Button released
+    if ((millis() - buttonPressStartTime) < WIFI_RESET_PRESS_TIME)
+    {
+      // Short press - handle normal playback toggle
       if (isPlaying)
       {
         Serial.println("Button pressed: Stopping playback");
@@ -385,6 +403,7 @@ void handleButton()
         isPlaying = true;
       }
     }
+    buttonWasPressed = false;
   }
 }
 
