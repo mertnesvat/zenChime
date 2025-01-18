@@ -103,7 +103,7 @@ void setupWiFi()
   wifiManager.setConfigPortalTimeout(180);
 
   // This will now try to connect using saved credentials first
-  if (!wifiManager.autoConnect("ESP32_MP3_Player", "12345678"))
+  if (!wifiManager.autoConnect("ZenChime"))
   {
     Serial.println("Failed to connect and hit timeout");
     ESP.restart();
