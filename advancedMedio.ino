@@ -2,12 +2,13 @@
 #include <DFPlayerMini_Fast.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
-#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <TimeLib.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <ESPmDNS.h>
 
 // Pin definitions
 #define MP3_RX 16
@@ -17,7 +18,7 @@
 // Global objects
 DFPlayerMini_Fast myMP3;
 HardwareSerial mySoftwareSerial(1);
-AsyncWebServer server(80);
+WebServer server(80);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
@@ -113,11 +114,23 @@ void setupWiFi()
   {
     ESP.restart();
   }
+
+  // Initialize mDNS
+  if (!MDNS.begin("zenchime"))
+  {
+    Serial.println("Error setting up MDNS responder!");
+  }
+  else
+  {
+    Serial.println("mDNS responder started");
+    Serial.println("You can now access the device at: http://zenchime.local");
+    // Add service to mDNS
+    MDNS.addService("http", "tcp", 80);
+  }
 }
 
 void setupWebServer()
 {
-  // Check if SPIFFS is mounted correctly
   if (!SPIFFS.exists("/index.html"))
   {
     Serial.println("Warning: index.html not found in SPIFFS");
@@ -125,10 +138,11 @@ void setupWebServer()
   }
 
   // Serve static files
-  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+  server.serveStatic("/", SPIFFS, "/index.html");
+  server.serveStatic("/index.html", SPIFFS, "/index.html");
 
   // API endpoints
-  server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest *request)
+  server.on("/api/settings", HTTP_GET, []()
             {
     JsonDocument doc;
     doc["volume"] = settings.volume;
@@ -146,61 +160,55 @@ void setupWebServer()
     
     String response;
     serializeJson(doc, response);
-    request->send(200, "application/json", response); });
+    server.send(200, "application/json", response); });
 
-  server.on("/api/settings", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+  server.on("/api/settings", HTTP_POST, []()
             {
+    if (server.hasArg("plain")) {
+      String json = server.arg("plain");
       JsonDocument doc;
-      deserializeJson(doc, (const char*)data);
+      DeserializationError error = deserializeJson(doc, json);
       
-      // Debug incoming data
-      Serial.println("Received settings:");
-      serializeJsonPretty(doc, Serial);
-      Serial.println();
-      
+      if (error) {
+        server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return;
+      }
+
       settings.volume = doc["volume"] | settings.volume;
       
-      // Debug timezone changes
       int oldTimezone = settings.timezone;
       settings.timezone = doc["timezone"] | settings.timezone;
-      Serial.printf("Timezone changed from UTC%+d to UTC%+d\n", 
-                   oldTimezone, settings.timezone);
-      
       timeClient.setTimeOffset(settings.timezone * 3600);
       
-      // Handle scheduled times
       JsonArray hours = doc["scheduledHours"];
       JsonArray minutes = doc["scheduledMinutes"];
       int newCount = doc["activeTimeCount"] | 0;
-      
-      Serial.printf("Received %d scheduled times\n", newCount);
       
       settings.activeTimeCount = min((size_t)settings.MAX_TIMES, (size_t)newCount);
       
       for(int i = 0; i < settings.activeTimeCount; i++) {
         settings.scheduledHours[i] = hours[i];
         settings.scheduledMinutes[i] = minutes[i];
-        Serial.printf("Saved time slot %d: %02d:%02d\n", 
-                     i + 1, 
-                     settings.scheduledHours[i], 
-                     settings.scheduledMinutes[i]);
       }
       
       myMP3.volume(settings.volume);
       saveSettings();
       
-      request->send(200, "application/json", "{\"status\":\"success\"}"); });
+      server.send(200, "application/json", "{\"status\":\"success\"}");
+    } else {
+      server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"No data received\"}");
+    } });
 
-  server.on("/api/play", HTTP_POST, [](AsyncWebServerRequest *request)
+  server.on("/api/play", HTTP_POST, []()
             {
     myMP3.playFolder(1, 1);
-    request->send(200, "application/json", "{\"status\":\"playing\"}"); });
+    server.send(200, "application/json", "{\"status\":\"playing\"}"); });
 
-  server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *request)
+  server.on("/api/stop", HTTP_POST, []()
             {
     myMP3.stop();
     isPlaying = false;
-    request->send(200, "application/json", "{\"status\":\"stopped\"}"); });
+    server.send(200, "application/json", "{\"status\":\"stopped\"}"); });
 
   server.begin();
   Serial.println("Web server started");
@@ -409,6 +417,7 @@ void handleButton()
 
 void loop()
 {
+  server.handleClient();
   timeClient.update();
   playScheduledAnnouncement();
   handleButton();
