@@ -15,8 +15,8 @@
 // Version control
 #define FIRMWARE_VERSION "1.0.0"
 #define GITHUB_REPO "mertnesvat/zenChime"
-#define FIRMWARE_URL "https://raw.githubusercontent.com/" GITHUB_REPO "/main/firmware.bin"
-#define VERSION_URL "https://raw.githubusercontent.com/" GITHUB_REPO "/main/version.json"
+#define FIRMWARE_URL "https://raw.githubusercontent.com/" GITHUB_REPO "/main/zenChime/firmware/bin/firmware.bin"
+#define VERSION_URL "https://raw.githubusercontent.com/" GITHUB_REPO "/main/zenChime/firmware/bin/version.json"
 
 // Pin definitions
 #define MP3_RX 16
