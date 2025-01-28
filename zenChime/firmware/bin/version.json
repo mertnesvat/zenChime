@@ -1,0 +1,16 @@
+{
+    "version": "1.0.0",
+    "notes": "Initial release of ZenChime with OTA support",
+    "releaseDate": "2024-01-28",
+    "features": [
+        "OTA Updates",
+        "Web Interface",
+        "Scheduled Meditation Chimes",
+        "WiFi Management"
+    ],
+    "minVersion": "1.0.0",
+    "compatibility": {
+        "hardware": "ESP32",
+        "requiredStorage": "4MB"
+    }
+}
