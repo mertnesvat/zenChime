@@ -13,7 +13,7 @@
 #include <HTTPUpdate.h>
 
 // Version control
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.0.1"
 #define GITHUB_REPO "mertnesvat/zenChime"
 #define FIRMWARE_URL "https://raw.githubusercontent.com/" GITHUB_REPO "/main/zenChime/firmware/bin/firmware.bin"
 #define VERSION_URL "https://raw.githubusercontent.com/" GITHUB_REPO "/main/zenChime/firmware/bin/version.json"
@@ -62,6 +62,8 @@ String checkForUpdates();
 void setup()
 {
   Serial.begin(115200);
+  Serial.println("\n=== ZenChime v1.0.1 Starting ===");
+  Serial.println("New in this version: Improved startup message");
 
   if (!SPIFFS.begin(true))
   {

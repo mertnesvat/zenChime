@@ -1,12 +1,13 @@
 {
-    "version": "1.0.0",
-    "notes": "Initial release of ZenChime with OTA support",
+    "version": "1.0.1",
+    "notes": "Added startup message and improved version tracking",
     "releaseDate": "2024-01-28",
     "features": [
         "OTA Updates",
         "Web Interface",
         "Scheduled Meditation Chimes",
-        "WiFi Management"
+        "WiFi Management",
+        "Improved Startup Messages"
     ],
     "minVersion": "1.0.0",
     "compatibility": {
