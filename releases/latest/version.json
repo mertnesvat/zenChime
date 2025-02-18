@@ -1,14 +1,8 @@
 {
-  "version": "1.0.1",
-  "notes": "Added startup message and improved version tracking",
-  "releaseDate": "2024-01-28",
-  "features": [
-    "OTA Updates",
-    "Web Interface",
-    "Scheduled Meditation Chimes",
-    "WiFi Management",
-    "Improved Startup Messages"
-  ],
+  "version": "1.0.2",
+  "notes": "Added version checks",
+  "releaseDate": "2025-02-18",
+  "features": ["OTA Updates", "New Version Testing"],
   "minVersion": "1.0.0",
   "compatibility": {
     "hardware": "ESP32",
