@@ -1,5 +1,31 @@
 # ZenChime: Your Daily Mindfulness Journey
 
+<code>
+zenChime/
+├── data/                  # Web interface files
+│   ├── index.html
+│   └── settings.json
+├── firmware/             # Main firmware code
+│   └── zenChime.ino
+├── releases/            # Compiled firmware and version info
+│   ├── latest/
+│   │   ├── firmware.bin
+│   │   └── version.json
+│   └── archive/         # Previous versions
+│       ├── v1.0.0/
+│       │   ├── firmware.bin
+│       │   └── version.json
+│       └── v1.0.1/
+│           ├── firmware.bin
+│           └── version.json
+├── sd_card/             # Example MP3 files
+│   └── 01/
+│       ├── 00001.mp3
+│       └── ...
+└── tests/               # Test files
+    ├── ZenChime_UI_Test.ino
+    └── TFT_Quote_Test.ino
+</code>
 ## Project Overview
 
 ZenChime transforms your daily routine into mindful moments through scheduled meditation reminders and guided sessions. This IoT-based mindfulness companion helps users maintain awareness throughout their day with gentle chimes and structured meditation phases.
