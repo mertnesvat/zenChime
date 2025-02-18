@@ -37,8 +37,9 @@ struct Settings
   static const int MAX_TIMES = 10;                 // Maximum number of scheduled times
   int scheduledHours[MAX_TIMES] = {8, 11, 13, 17}; // Default times
   int scheduledMinutes[MAX_TIMES] = {0, 45, 0, 0};
-  int activeTimeCount = 4; // Number of active scheduled times
-  int timezone = 0;        // Changed default to UTC+0 (London)
+  int activeTimeCount = 4;                      // Number of active scheduled times
+  int timezone = 0;                             // Changed default to UTC+0 (London)
+  int scheduledSongs[MAX_TIMES] = {1, 1, 1, 1}; // Default to song 1 for all slots
 } settings;
 
 // Add these global variables at the top with other globals
@@ -165,10 +166,12 @@ void setupWebServer()
     
     JsonArray hours = doc.createNestedArray("scheduledHours");
     JsonArray minutes = doc.createNestedArray("scheduledMinutes");
+    JsonArray songs = doc.createNestedArray("scheduledSongs");
     
     for(int i = 0; i < settings.activeTimeCount; i++) {
       hours.add(settings.scheduledHours[i]);
       minutes.add(settings.scheduledMinutes[i]);
+      songs.add(settings.scheduledSongs[i]);
     }
     
     doc["activeTimeCount"] = settings.activeTimeCount;
@@ -197,6 +200,7 @@ void setupWebServer()
       
       JsonArray hours = doc["scheduledHours"];
       JsonArray minutes = doc["scheduledMinutes"];
+      JsonArray songs = doc["scheduledSongs"];
       int newCount = doc["activeTimeCount"] | 0;
       
       settings.activeTimeCount = min((size_t)settings.MAX_TIMES, (size_t)newCount);
@@ -204,6 +208,7 @@ void setupWebServer()
       for(int i = 0; i < settings.activeTimeCount; i++) {
         settings.scheduledHours[i] = hours[i];
         settings.scheduledMinutes[i] = minutes[i];
+        settings.scheduledSongs[i] = songs[i] | 1; // Default to 1 if not specified
       }
       
       myMP3.volume(settings.volume);
@@ -250,11 +255,13 @@ void saveSettings()
 
   JsonArray hours = doc.createNestedArray("scheduledHours");
   JsonArray minutes = doc.createNestedArray("scheduledMinutes");
+  JsonArray songs = doc.createNestedArray("scheduledSongs");
 
   for (int i = 0; i < settings.activeTimeCount; i++)
   {
     hours.add(settings.scheduledHours[i]);
     minutes.add(settings.scheduledMinutes[i]);
+    songs.add(settings.scheduledSongs[i]);
   }
 
   doc["activeTimeCount"] = settings.activeTimeCount;
@@ -288,6 +295,7 @@ void loadSettings()
 
   JsonArray hours = doc["scheduledHours"];
   JsonArray minutes = doc["scheduledMinutes"];
+  JsonArray songs = doc["scheduledSongs"];
 
   settings.activeTimeCount = min((size_t)settings.MAX_TIMES, hours.size());
 
@@ -295,6 +303,7 @@ void loadSettings()
   {
     settings.scheduledHours[i] = hours[i] | settings.scheduledHours[i];
     settings.scheduledMinutes[i] = minutes[i] | settings.scheduledMinutes[i];
+    settings.scheduledSongs[i] = songs[i] | 1; // Default to song 1 if not specified
   }
 
   file.close();
@@ -363,12 +372,12 @@ void playScheduledAnnouncement()
         // Only play if we haven't played at this exact time
         if (currentHour != lastPlayedHour || currentMinute != lastPlayedMinute)
         {
-          Serial.printf("Playing scheduled announcement at %02d:%02d\n",
-                        currentHour, currentMinute);
+          Serial.printf("Playing scheduled song %d at %02d:%02d\n",
+                        settings.scheduledSongs[i], currentHour, currentMinute);
           Serial.printf("Last played at: %02d:%02d\n",
                         lastPlayedHour, lastPlayedMinute);
 
-          myMP3.playFolder(1, 1);
+          myMP3.playFolder(1, settings.scheduledSongs[i]);
           lastPlayedHour = currentHour;
           lastPlayedMinute = currentMinute;
 
