@@ -221,13 +221,17 @@ void setupWebServer()
 
   server.on("/api/play", HTTP_POST, []()
             {
+    // Stop any ongoing playback before starting a new one
+    if (isPlaying) {
+      stopPlayback();
+    }
     myMP3.playFolder(1, 1);
+    isPlaying = true;
     server.send(200, "application/json", "{\"status\":\"playing\"}"); });
 
   server.on("/api/stop", HTTP_POST, []()
             {
-    myMP3.stop();
-    isPlaying = false;
+    stopPlayback(); // Use the centralized function
     server.send(200, "application/json", "{\"status\":\"stopped\"}"); });
 
   server.on("/api/check-update", HTTP_GET, []()
@@ -327,6 +331,13 @@ bool isWithinActiveHours()
   return false;
 }
 
+// Function to centralize playback stopping logic
+void stopPlayback() {
+  Serial.println("Stopping playback");
+  myMP3.stop();
+  isPlaying = false;
+}
+
 void playScheduledAnnouncement()
 {
   static unsigned long lastCheck = 0;
@@ -377,7 +388,13 @@ void playScheduledAnnouncement()
           Serial.printf("Last played at: %02d:%02d\n",
                         lastPlayedHour, lastPlayedMinute);
 
+          // Stop any ongoing playback before starting a new one
+          if (isPlaying) {
+            stopPlayback();
+          }
+          
           myMP3.playFolder(1, settings.scheduledSongs[i]);
+          isPlaying = true; // Set the flag to indicate playback is active
           lastPlayedHour = currentHour;
           lastPlayedMinute = currentMinute;
 
@@ -430,8 +447,7 @@ void handleButton()
       if (isPlaying)
       {
         Serial.println("Button pressed: Stopping playback");
-        myMP3.stop();
-        isPlaying = false;
+        stopPlayback(); // Use the centralized function
       }
       else
       {
