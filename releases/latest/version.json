@@ -1,7 +1,7 @@
 {
   "version": "1.0.5",
-  "notes": "Improved Firebase settings synchronization",
+  "notes": "Simple OTA update system",
   "releaseDate": "2025-04-25",
-  "url": "https://raw.githubusercontent.com/mertnesvat/zenChime/main/zenChime/releases/latest/firmware.bin",
+  "url": "https://raw.githubusercontent.com/mertnesvat/zenChime/main/releases/latest/firmware_v1.0.5.bin",
   "md5": "71d7314c38328fded95d36a36d477c8e"
 }
