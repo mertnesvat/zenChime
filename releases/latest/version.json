@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.4",
   "notes": "Added version checks",
   "releaseDate": "2025-02-18",
   "features": ["OTA Updates", "New Version Testing"],
