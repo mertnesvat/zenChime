@@ -1,7 +1,6 @@
 {
-  "version": "1.0.5",
-  "notes": "Simple OTA update system",
-  "releaseDate": "2025-04-25",
-  "url": "https://raw.githubusercontent.com/mertnesvat/zenChime/main/releases/latest/firmware_v1.0.5.bin",
-  "md5": "71d7314c38328fded95d36a36d477c8e"
+  "version": "1.0.6",
+  "url": "https://raw.githubusercontent.com/mertnesvat/zenChime/main/releases/latest/firmware.bin",
+  "notes": "This version includes OTA update improvements",
+  "date": "2025-04-26"
 }
